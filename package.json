@@ -1,0 +1,82 @@
+{
+  "name": "electron-vite-pixi-starter",
+  "version": "0.1.0",
+  "description": "Base Electron + Vite + Pixi.js starter project",
+  "main": "electron/main.js",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "clean": "rm -rf dist release",
+    "dev": "concurrently -k \"npm:dev:renderer\" \"npm:dev:main\"",
+    "dev:renderer": "vite",
+    "dev:main": "wait-on http://localhost:5173 && npm run start:electron",
+    "start:electron": "cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .",
+    "build": "npm run clean && vite build",
+    "build:web": "npm run build",
+    "preview:web": "vite preview --host",
+    "package": "npm run build && electron-builder",
+    "package:dir": "npm run build && electron-builder --dir",
+    "start": "cross-env NODE_ENV=production electron ."
+  },
+  "keywords": [
+    "electron",
+    "vite",
+    "pixi"
+  ],
+  "author": "Ryan Malm",
+  "homepage": "https://example.com/electron-vite-pixi-starter",
+  "dependencies": {
+    "pixi.js": "^8.13.2"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.0.0",
+    "electron": "^38.1.2",
+    "electron-builder": "^26.0.12",
+    "vite": "^7.1.6",
+    "wait-on": "^9.0.0"
+  },
+  "build": {
+    "appId": "com.example.electronvitepixi",
+    "productName": "Electron Vite Pixi Starter",
+    "asar": true,
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "build/apparmor",
+        "to": "apparmor"
+      }
+    ],
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "mac": {
+      "target": ["dmg", "zip"]
+    },
+    "win": {
+      "target": ["nsis", "zip"]
+    },
+    "linux": {
+      "target": ["AppImage", "tar.gz", "deb"],
+      "category": "Game",
+      "maintainer": "Ryan Malm <ryan.malm@example.com>",
+      "synopsis": "Electron shell for a Pixi.js based game",
+      "description": "Electron desktop shell bundled with a Pixi.js powered web renderer."
+    },
+    "deb": {
+      "afterInstall": "build/linux/deb/after-install.sh",
+      "afterRemove": "build/linux/deb/after-remove.sh",
+      "depends": [
+        "libnss3",
+        "libatk-bridge2.0-0",
+        "libgtk-3-0",
+        "libxss1"
+      ]
+    }
+  }
+}

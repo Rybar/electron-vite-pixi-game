@@ -1,0 +1,31 @@
+# AppArmor profile for the Electron Vite Pixi Starter application
+#include <tunables/global>
+
+profile electron-vite-pixi-starter /opt/Electron\ Vite\ Pixi\ Starter/electron-vite-pixi-starter flags=(attach_disconnected,mediate_deleted) {
+  # Base desktop permissions
+  #include <abstractions/base>
+  #include <abstractions/nameservice>
+  #include <abstractions/user-tmp>
+  #include <abstractions/X>
+  #include <abstractions/dbus-session>
+  #include <abstractions/audio>
+  #include <abstractions/fonts>
+  #include <abstractions/dri>
+  #include <abstractions/ssl_certs>
+
+  # Allow the app to create unprivileged user namespaces (required on Ubuntu 23.10+)
+  userns,
+
+  network inet,
+  network inet6,
+  network unix,
+
+  owner @{HOME}/.config/** rwk,
+  owner @{HOME}/.cache/** rwk,
+  owner @{HOME}/.local/share/** rwk,
+  owner @{HOME}/.pki/nssdb/** rwk,
+  /opt/Electron\ Vite\ Pixi\ Starter/** mr,
+  /tmp/** rw,
+  owner /dev/shm/** rw,
+  owner /run/user/*/** rw,
+}
