@@ -24,15 +24,8 @@ body {
 
 .hud-overlay {
   position: absolute;
-  top: 0;
-  left: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px;
+  inset: 0;
   pointer-events: none;
-  width: 100%;
-  max-width: 360px;
   z-index: 10;
 }
 
@@ -46,6 +39,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  width: 320px;
 }
 
 .hud-panel__heading {
@@ -53,6 +47,12 @@ body {
   font-size: 0.95rem;
   letter-spacing: 0.2em;
   color: #bad7ff;
+  background: rgba(186, 215, 255, 0.16);
+  padding: 8px 12px;
+  border-radius: 12px;
+  display: inline-flex;
+  cursor: move;
+  user-select: none;
 }
 
 .hud-panel__copy {
@@ -114,6 +114,58 @@ body {
   color: #8be9fd;
   font-family: 'Inter', monospace;
   white-space: nowrap;
+  width: 240px;
+}
+
+.hud-debug__handle {
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #9da9c9;
+  background: rgba(157, 169, 201, 0.14);
+  padding: 6px 10px;
+  border-radius: 10px;
+  margin-bottom: 6px;
+  cursor: move;
+  user-select: none;
+}
+
+[data-drag-handle='true'] {
+  cursor: move;
+  user-select: none;
+}
+
+.hud-toggle {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  pointer-events: auto;
+}
+
+.hud-toggle__button {
+  border: none;
+  border-radius: 50%;
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  background: rgba(12, 173, 150, 0.18);
+  color: #7df0d4;
+  border: 1px solid rgba(125, 240, 212, 0.38);
+  backdrop-filter: blur(12px);
+  transition: transform 0.15s ease, filter 0.15s ease;
+}
+
+.hud-toggle__button:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+}
+
+.hud-toggle__button svg {
+  width: 24px;
+  height: 24px;
 }
 
 .app-shell {

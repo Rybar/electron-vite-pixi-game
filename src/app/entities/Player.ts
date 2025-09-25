@@ -6,7 +6,7 @@ export interface PlayerInstance {
   hitbox: { width: number; height: number };
 }
 
-const SPAWN_POSITION = { x: 2000, y: 2000 };
+const SPAWN_POSITION = { x: 2400, y: 2200 };
 const BODY_SIZE = 48;
 const OUTLINE_SIZE = BODY_SIZE + 6;
 
