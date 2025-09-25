@@ -1,48 +1,156 @@
 import type { Application, FederatedPointerEvent } from 'pixi.js';
 import type { Viewport } from 'pixi-viewport';
 
-export type InputState = {
-  mouseWorldX: number;
-  mouseWorldY: number;
-  mouseDown: boolean;
-  gamepad: {
-    connected: boolean;
-    axes: number[];
-    buttons: boolean[];
-  };
-  keyboard: {
-    up: boolean;
-    down: boolean;
-    left: boolean;
-    right: boolean;
-  };
-};
+export type InputAction = string;
 
-export type GamepadPoller = (() => void) & { dispose(): void };
+export interface KeyboardBinding<Action extends string = InputAction> {
+  action: Action;
+  code: string;
+  preventDefault?: boolean;
+}
 
-export function createInputState(): InputState {
+interface BindingSpec<Action extends string = InputAction> {
+  action: Action;
+  preventDefault: boolean;
+}
+
+export interface InputSnapshot<Action extends string = InputAction> {
+  held: Action[];
+  pressed: Action[];
+  released: Action[];
+}
+
+export interface InputMapper<Action extends string = InputAction> {
+  poll(): InputSnapshot<Action>;
+  isHeld(action: Action): boolean;
+  dispose(): void;
+}
+
+export function createInputMapper<Action extends string = InputAction>(
+  bindings: readonly KeyboardBinding<Action>[],
+  target: Window = window
+): InputMapper<Action> {
+  const keyboardBindings = new Map<string, BindingSpec<Action>[]>();
+  bindings.forEach((binding) => {
+    const normalized: BindingSpec<Action> = {
+      action: binding.action,
+      preventDefault: binding.preventDefault ?? true
+    };
+    const list = keyboardBindings.get(binding.code);
+    if (list) {
+      list.push(normalized);
+    } else {
+      keyboardBindings.set(binding.code, [normalized]);
+    }
+  });
+
+  const held = new Set<Action>();
+  const pressed = new Set<Action>();
+  const released = new Set<Action>();
+
+  const handleKeyDown = (event: KeyboardEvent) => {
+    const specs = keyboardBindings.get(event.code);
+    if (!specs) {
+      return;
+    }
+
+    let prevent = false;
+    for (const spec of specs) {
+      if (!held.has(spec.action)) {
+        held.add(spec.action);
+        pressed.add(spec.action);
+      }
+      prevent ||= spec.preventDefault;
+    }
+
+    if (prevent) {
+      event.preventDefault();
+    }
+  };
+
+  const handleKeyUp = (event: KeyboardEvent) => {
+    const specs = keyboardBindings.get(event.code);
+    if (!specs) {
+      return;
+    }
+
+    let prevent = false;
+    for (const spec of specs) {
+      if (held.has(spec.action)) {
+        held.delete(spec.action);
+        released.add(spec.action);
+      }
+      prevent ||= spec.preventDefault;
+    }
+
+    if (prevent) {
+      event.preventDefault();
+    }
+  };
+
+  target.addEventListener('keydown', handleKeyDown);
+  target.addEventListener('keyup', handleKeyUp);
+
   return {
-    mouseWorldX: 0,
-    mouseWorldY: 0,
-    mouseDown: false,
-    gamepad: {
-      connected: false,
-      axes: [0, 0, 0, 0],
-      buttons: []
+    poll() {
+      const snapshot: InputSnapshot<Action> = {
+        held: Array.from(held),
+        pressed: Array.from(pressed),
+        released: Array.from(released)
+      };
+      pressed.clear();
+      released.clear();
+      return snapshot;
     },
-    keyboard: {
-      up: false,
-      down: false,
-      left: false,
-      right: false
+    isHeld(action: Action) {
+      return held.has(action);
+    },
+    dispose() {
+      target.removeEventListener('keydown', handleKeyDown);
+      target.removeEventListener('keyup', handleKeyUp);
+      held.clear();
+      pressed.clear();
+      released.clear();
     }
   };
 }
 
+export function digitalAxis<Action extends string = InputAction>(
+  input: Pick<InputMapper<Action>, 'isHeld'>,
+  negative: Action,
+  positive: Action
+) {
+  const neg = input.isHeld(negative) ? -1 : 0;
+  const pos = input.isHeld(positive) ? 1 : 0;
+  return neg + pos;
+}
+
+export interface PointerState {
+  mouseWorldX: number;
+  mouseWorldY: number;
+  mouseDown: boolean;
+}
+
+export function createPointerState(): PointerState {
+  return {
+    mouseWorldX: 0,
+    mouseWorldY: 0,
+    mouseDown: false
+  };
+}
+
+export type GamepadState = {
+  connected: boolean;
+  axes: number[];
+  buttons: boolean[];
+};
+
+export type GamepadPoller = (() => void) & { dispose(): void };
+
 export function attachPointer(
   app: Application,
   viewport: Viewport,
-  state: InputState
+  state: PointerState
 ): () => void {
   app.stage.eventMode = 'static';
   app.stage.hitArea = app.screen;
@@ -74,15 +182,23 @@ export function attachPointer(
   };
 }
 
-export function attachGamepad(state: InputState): GamepadPoller {
+export function createGamepadState(): GamepadState {
+  return {
+    connected: false,
+    axes: [0, 0, 0, 0],
+    buttons: []
+  };
+}
+
+export function attachGamepad(state: GamepadState): GamepadPoller {
   const handleConnect = () => {
-    state.gamepad.connected = true;
+    state.connected = true;
   };
 
   const handleDisconnect = () => {
-    state.gamepad.connected = false;
-    state.gamepad.axes = [0, 0, 0, 0];
-    state.gamepad.buttons = [];
+    state.connected = false;
+    state.axes = [0, 0, 0, 0];
+    state.buttons = [];
   };
 
   window.addEventListener('gamepadconnected', handleConnect);
@@ -92,15 +208,15 @@ export function attachGamepad(state: InputState): GamepadPoller {
     const pads = navigator.getGamepads ? navigator.getGamepads() : [];
     const pad = pads?.[0];
     if (!pad) {
-      if (state.gamepad.connected) {
+      if (state.connected) {
         handleDisconnect();
       }
       return;
     }
 
-    state.gamepad.connected = true;
-    state.gamepad.axes = pad.axes.slice(0, 4).map((value) => (Math.abs(value) > 0.1 ? value : 0));
-    state.gamepad.buttons = pad.buttons.map((btn) => btn.pressed);
+    state.connected = true;
+    state.axes = pad.axes.slice(0, 4).map((value) => (Math.abs(value) > 0.1 ? value : 0));
+    state.buttons = pad.buttons.map((btn) => btn.pressed);
   }) as GamepadPoller;
 
   poll.dispose = () => {
@@ -109,60 +225,4 @@ export function attachGamepad(state: InputState): GamepadPoller {
   };
 
   return poll;
-}
-
-export function attachKeyboard(state: InputState): () => void {
-  const handleKeyDown = (event: KeyboardEvent) => {
-    switch (event.code) {
-      case 'ArrowUp':
-      case 'KeyW':
-        state.keyboard.up = true;
-        break;
-      case 'ArrowDown':
-      case 'KeyS':
-        state.keyboard.down = true;
-        break;
-      case 'ArrowLeft':
-      case 'KeyA':
-        state.keyboard.left = true;
-        break;
-      case 'ArrowRight':
-      case 'KeyD':
-        state.keyboard.right = true;
-        break;
-      default:
-        break;
-    }
-  };
-
-  const handleKeyUp = (event: KeyboardEvent) => {
-    switch (event.code) {
-      case 'ArrowUp':
-      case 'KeyW':
-        state.keyboard.up = false;
-        break;
-      case 'ArrowDown':
-      case 'KeyS':
-        state.keyboard.down = false;
-        break;
-      case 'ArrowLeft':
-      case 'KeyA':
-        state.keyboard.left = false;
-        break;
-      case 'ArrowRight':
-      case 'KeyD':
-        state.keyboard.right = false;
-        break;
-      default:
-        break;
-    }
-  };
-
-  window.addEventListener('keydown', handleKeyDown);
-  window.addEventListener('keyup', handleKeyUp);
-
-  return () => {
-    window.removeEventListener('keydown', handleKeyDown);
-    window.removeEventListener('keyup', handleKeyUp);
-  };
 }

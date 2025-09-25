@@ -3,6 +3,7 @@ import { Container, Graphics } from 'pixi.js';
 export interface PlayerInstance {
   sprite: Container;
   position: { x: number; y: number };
+  hitbox: { width: number; height: number };
 }
 
 const SPAWN_POSITION = { x: 2000, y: 2000 };
@@ -27,6 +28,7 @@ export function createPlayer(): PlayerInstance {
 
   return {
     sprite: container,
-    position: { ...SPAWN_POSITION }
+    position: { ...SPAWN_POSITION },
+    hitbox: { width: BODY_SIZE, height: BODY_SIZE }
   };
 }

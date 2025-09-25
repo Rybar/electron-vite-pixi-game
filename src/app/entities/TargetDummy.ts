@@ -2,6 +2,7 @@ import { Container, Graphics } from 'pixi.js';
 
 export interface TargetDummyInstance {
   container: Container;
+  hitbox: { radius: number };
 }
 
 const SPAWN_POINTS = [
@@ -27,6 +28,9 @@ export function createTargetDummies(): TargetDummyInstance[] {
 
     container.addChild(outline, body);
 
-    return { container };
+    return {
+      container,
+      hitbox: { radius: 28 }
+    };
   });
 }

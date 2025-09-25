@@ -4,6 +4,9 @@ export interface HudDebugInfo {
   playerX: number;
   playerY: number;
   fps: number;
+  stepMs: number;
+  entities: number;
+  showHitboxes: boolean;
 }
 
 export interface HudState {
@@ -25,7 +28,10 @@ const DEFAULT_STATE: HudState = {
     cameraY: 0,
     playerX: 0,
     playerY: 0,
-    fps: 0
+    fps: 0,
+    stepMs: 0,
+    entities: 0,
+    showHitboxes: false
   },
   volume: 0.5,
   musicPlaying: false
