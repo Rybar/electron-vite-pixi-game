@@ -1,22 +1,13 @@
-import {
-  Application,
-  Container,
-  Graphics,
-  Text,
-  TextStyle,
-  TilingSprite
-} from 'pixi.js';
+import { Application, Graphics, TilingSprite } from 'pixi.js';
 import { Viewport } from 'pixi-viewport';
 
 import { attachKeyboard, createInputState } from '../input/input';
-import { createHUD } from '../ui/hud';
-import { pulse } from '../systems/anim';
-import { initAudio, playClick, setMasterVolume, toggleMusic } from '../systems/audio';
+import { initAudio, setMasterVolume, toggleMusic, isMusicPlaying } from '../systems/audio';
 import { createWorldWithCamera, type WorldWithCamera } from '../systems/camera';
-import { createTextExamples } from '../systems/text';
 
 import { createPlayer } from '../entities/Player';
 import { createTargetDummies } from '../entities/TargetDummy';
+import type { HudStore } from '../../hud/hudStore';
 
 export class DemoScene {
   private app!: Application;
@@ -24,8 +15,10 @@ export class DemoScene {
   private player!: ReturnType<typeof createPlayer>['sprite'];
   private playerPosition = { x: 0, y: 0 };
   private detachKeyboard?: () => void;
-  private hudContainer?: Container;
   private tickerFn?: (delta: number) => void;
+  private hudUpdateAccumulator = 0;
+
+  constructor(private readonly hudStore: HudStore) {}
 
   async init(app: Application) {
     this.app = app;
@@ -51,42 +44,23 @@ export class DemoScene {
     const input = createInputState();
     this.detachKeyboard = attachKeyboard(input);
 
-    const hudElements = createHUD(app, () => {
-      toggleMusic();
-      playClick();
-      pulse(hudElements.audioBtn.view);
-    });
-    this.hudContainer = hudElements.hud;
-
-    hudElements.volume.onUpdate.connect(setMasterVolume);
-    hudElements.volume.onChange.connect(setMasterVolume);
-    setMasterVolume(hudElements.volume.value ?? 0.5);
-
-    const { styled, bitmap } = await createTextExamples();
-    styled.position.set(180, 24);
-    hudElements.hud.addChild(styled);
-    if (bitmap) {
-      bitmap.position.set(180, 52);
-      hudElements.hud.addChild(bitmap);
-    }
-
-    const debugText = new Text({
-      text: '',
-      style: new TextStyle({
-        fill: 0x8be9fd,
-        fontFamily: 'Inter, monospace',
-        fontSize: 12
-      })
-    });
-    debugText.position.set(20, 142);
-    hudElements.hud.addChild(debugText);
-    debugText.text = `Camera: (${viewport.center.x.toFixed(1)}, ${viewport.center.y.toFixed(1)})\nPlayer: (${this.playerPosition.x.toFixed(1)}, ${this.playerPosition.y.toFixed(1)})`;
-
     await initAudio();
     toggleMusic();
+    setMasterVolume(0.5);
+    this.hudStore.setState({
+      volume: 0.5,
+      musicPlaying: isMusicPlaying()
+    });
 
     viewport.follow(this.player, { speed: 10 });
     viewport.moveCenter(this.playerPosition.x, this.playerPosition.y);
+    this.hudStore.updateDebug({
+      cameraX: viewport.center.x,
+      cameraY: viewport.center.y,
+      playerX: this.playerPosition.x,
+      playerY: this.playerPosition.y,
+      fps: this.app.ticker.FPS ?? 0
+    });
 
     this.tickerFn = ({ deltaTime }) => {
       const speed = 6 * deltaTime;
@@ -98,8 +72,19 @@ export class DemoScene {
 
       this.player.position.set(this.playerPosition.x, this.playerPosition.y);
 
-      const cameraCenter = viewport.center;
-      debugText.text = `Camera: (${cameraCenter.x.toFixed(1)}, ${cameraCenter.y.toFixed(1)})\nPlayer: (${this.playerPosition.x.toFixed(1)}, ${this.playerPosition.y.toFixed(1)})`;
+      this.hudUpdateAccumulator += this.app.ticker.deltaMS;
+      if (this.hudUpdateAccumulator >= 200) {
+        const cameraCenter = viewport.center;
+        const fps = this.app.ticker.FPS ?? 0;
+        this.hudStore.updateDebug({
+          cameraX: cameraCenter.x,
+          cameraY: cameraCenter.y,
+          playerX: this.playerPosition.x,
+          playerY: this.playerPosition.y,
+          fps
+        });
+        this.hudUpdateAccumulator = 0;
+      }
     };
 
     app.ticker.add(this.tickerFn);
@@ -117,14 +102,8 @@ export class DemoScene {
       this.detachKeyboard = undefined;
     }
 
-    if (this.hudContainer?.parent) {
-      this.hudContainer.parent.removeChild(this.hudContainer);
-      this.hudContainer.destroy({ children: true });
-      this.hudContainer = undefined;
-    }
-
     this.worldWithCamera?.viewport.destroy({ children: true, texture: true });
-}
+  }
 
   private createCheckerboard(app: Application, width: number, height: number) {
     const tileSize = 128;

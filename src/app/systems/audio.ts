@@ -44,3 +44,8 @@ export function playClick() {
   if (!audioReady) return;
   sound.play('click');
 }
+
+export function isMusicPlaying() {
+  const bg = sound.find('bg');
+  return bg?.isPlaying ?? false;
+}

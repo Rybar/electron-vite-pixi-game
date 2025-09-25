@@ -9,7 +9,10 @@ export async function createPixiApp(opts: PixiAppOptions = {}) {
   await app.init({
     background: '#101014',
     antialias: true,
-    resizeTo: window,
+    width: 1280,
+    height: 720,
+    resolution: 1,
+    autoDensity: false,
     ...opts
   });
 
