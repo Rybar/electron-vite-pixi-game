@@ -26,13 +26,22 @@
   "author": "Ryan Malm",
   "homepage": "https://example.com/electron-vite-pixi-starter",
   "dependencies": {
+    "@pixi/sound": "^6.0.1",
+    "@pixi/text-html": "^7.4.3",
+    "@pixi/ui": "^2.2.7",
+    "gsap": "^3.13.0",
+    "pixi-react": "^1.2.2",
+    "pixi-viewport": "^6.0.3",
     "pixi.js": "^8.13.2"
   },
   "devDependencies": {
+    "@types/node": "^24.5.2",
+    "@types/webappsec-credential-management": "^0.6.9",
     "concurrently": "^9.2.1",
     "cross-env": "^10.0.0",
     "electron": "^38.1.2",
     "electron-builder": "^26.0.12",
+    "typescript": "^5.9.2",
     "vite": "^7.1.6",
     "wait-on": "^9.0.0"
   },
@@ -56,13 +65,23 @@
       "buildResources": "build"
     },
     "mac": {
-      "target": ["dmg", "zip"]
+      "target": [
+        "dmg",
+        "zip"
+      ]
     },
     "win": {
-      "target": ["nsis", "zip"]
+      "target": [
+        "nsis",
+        "zip"
+      ]
     },
     "linux": {
-      "target": ["AppImage", "tar.gz", "deb"],
+      "target": [
+        "AppImage",
+        "tar.gz",
+        "deb"
+      ],
       "category": "Game",
       "maintainer": "Ryan Malm <ryan.malm@example.com>",
       "synopsis": "Electron shell for a Pixi.js based game",
