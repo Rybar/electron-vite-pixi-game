@@ -63,6 +63,7 @@ export function HudApp({ store }: HudAppProps) {
         <div>Step: {state.debug.stepMs.toFixed(2)} ms</div>
         <div>Entities: {state.debug.entities}</div>
         <div>Hitboxes: {state.debug.showHitboxes ? 'Visible' : 'Hidden'}</div>
+        <div>Grounded: {state.debug.playerGrounded ? 'Yes' : 'No'}</div>
       </section>
     </div>
   );

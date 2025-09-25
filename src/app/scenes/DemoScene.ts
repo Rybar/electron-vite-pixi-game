@@ -1,5 +1,4 @@
 import { Application, Container, Graphics, TilingSprite, Texture } from 'pixi.js';
-import { Viewport } from 'pixi-viewport';
 
 import { createAssetLoader, type AssetLoader } from '../core/assets';
 import { startFixedStep, type FixedStepController } from '../core/fixedStep';
@@ -19,6 +18,12 @@ import { createPlayer } from '../entities/Player';
 import { createTargetDummies } from '../entities/TargetDummy';
 import { initAudio, isMusicPlaying, setMasterVolume, toggleMusic } from '../systems/audio';
 import { createWorldWithCamera, type WorldWithCamera } from '../systems/camera';
+import {
+  createPhysicsWorld,
+  type DynamicBody,
+  type PhysicsWorld,
+  type StaticBody
+} from '../physics/physics';
 
 import type { HudStore } from '../../hud/hudStore';
 
@@ -37,6 +42,7 @@ interface PlayerEntityData extends BaseEntityData {
   position: { x: number; y: number };
   velocity: { x: number; y: number };
   speed: number;
+  body: DynamicBody;
 }
 
 interface DummyEntityData extends BaseEntityData {}
@@ -76,10 +82,13 @@ export class DemoScene {
   private readonly pointerState = createPointerState();
   private readonly gamepadState = createGamepadState();
   private readonly hitboxGraphics = new Map<number, Graphics>();
+  private readonly staticHitboxGraphics: Graphics[] = [];
 
   private hitboxOverlay?: Container;
   private hudUpdateAccumulator = 0;
   private playerRecord?: EntityRecord<PlayerEntityData>;
+  private physicsWorld?: PhysicsWorld;
+  private staticBodies: StaticBody[] = [];
 
   constructor(private readonly hudStore: HudStore) {
     this.assets = createAssetLoader([
@@ -96,6 +105,8 @@ export class DemoScene {
     this.worldWithCamera = createWorldWithCamera(app, worldWidth, worldHeight);
     const { viewport, world } = this.worldWithCamera;
 
+    this.physicsWorld = createPhysicsWorld({ cellSize: 256 });
+
     let backgroundTexture: Texture | undefined;
     try {
       backgroundTexture = await this.assets.load<Texture>('background.tiles');
@@ -111,16 +122,27 @@ export class DemoScene {
     this.hitboxOverlay.visible = this.hudStore.getState().debug.showHitboxes;
     world.addChild(this.hitboxOverlay);
 
+    this.staticBodies = this.createLevelGeometry(world, worldWidth, worldHeight);
+    this.staticBodies.forEach((body) => this.drawStaticHitbox(body));
+
     const player = createPlayer();
     player.sprite.position.set(player.position.x, player.position.y);
     world.addChild(player.sprite);
+
+    const playerBody = this.physicsWorld.addDynamicBody({
+      x: player.position.x - player.hitbox.width / 2,
+      y: player.position.y - player.hitbox.height / 2,
+      width: player.hitbox.width,
+      height: player.hitbox.height
+    });
 
     this.playerRecord = this.entities.add<PlayerEntityData>('player', {
       display: player.sprite,
       position: { ...player.position },
       velocity: { x: 0, y: 0 },
       speed: 320,
-      hitbox: { type: 'rect', width: player.hitbox.width, height: player.hitbox.height }
+      hitbox: { type: 'rect', width: player.hitbox.width, height: player.hitbox.height },
+      body: playerBody
     });
     this.registerHitbox(this.playerRecord);
 
@@ -176,13 +198,49 @@ export class DemoScene {
 
     this.hitboxGraphics.forEach((graphic) => graphic.destroy());
     this.hitboxGraphics.clear();
+    this.staticHitboxGraphics.forEach((graphic) => graphic.destroy());
+    this.staticHitboxGraphics.length = 0;
     this.hitboxOverlay?.destroy({ children: true });
     this.hitboxOverlay = undefined;
 
     this.assets.clear();
     this.entities.clear();
+    this.physicsWorld?.clear();
+    this.physicsWorld = undefined;
 
     this.worldWithCamera?.viewport.destroy({ children: true, texture: true });
+  }
+
+  private createLevelGeometry(world: Container, width: number, height: number): StaticBody[] {
+    if (!this.physicsWorld) {
+      return [];
+    }
+
+    const borderThickness = 64;
+    const staticRects = [
+      { x: 0, y: 0, width, height: borderThickness },
+      { x: 0, y: height - borderThickness, width, height: borderThickness },
+      { x: 0, y: 0, width: borderThickness, height },
+      { x: width - borderThickness, y: 0, width: borderThickness, height },
+      { x: width / 2 - 200, y: height / 2 - 32, width: 400, height: 64 },
+      { x: width / 2 - 32, y: height / 2 - 200, width: 64, height: 400 }
+    ];
+
+    const bodies = staticRects.map((rect) => {
+      const body = this.physicsWorld!.addStaticBody(rect);
+
+      const tile = new Graphics()
+        .rect(0, 0, rect.width, rect.height)
+        .fill(0x191b22);
+      tile.position.set(rect.x, rect.y);
+      tile.alpha = 0.65;
+      tile.zIndex = -10;
+      world.addChild(tile);
+
+      return body;
+    });
+
+    return bodies;
   }
 
   private createBackground(
@@ -241,6 +299,19 @@ export class DemoScene {
     this.hitboxGraphics.set(record.id, graphic);
   }
 
+  private drawStaticHitbox(body: StaticBody) {
+    if (!this.hitboxOverlay) {
+      return;
+    }
+
+    const graphic = new Graphics()
+      .rect(-body.width / 2, -body.height / 2, body.width, body.height)
+      .stroke({ width: 2, color: 0xffc400, alpha: 0.6 });
+    graphic.position.set(body.x + body.width / 2, body.y + body.height / 2);
+    this.hitboxOverlay.addChild(graphic);
+    this.staticHitboxGraphics.push(graphic);
+  }
+
   private updateHitboxPositions() {
     for (const [id, graphic] of this.hitboxGraphics.entries()) {
       const record = this.entities.get<BaseEntityData>(id);
@@ -254,7 +325,7 @@ export class DemoScene {
   private handleSimulationStep = (dt: number) => {
     this.gamepadPoller?.();
 
-    if (!this.playerRecord || !this.input) {
+    if (!this.playerRecord || !this.input || !this.physicsWorld) {
       return;
     }
 
@@ -281,11 +352,16 @@ export class DemoScene {
     }
 
     const player = this.playerRecord.data;
-    player.velocity.x = axisX * player.speed;
-    player.velocity.y = axisY * player.speed;
+    const playerBody = player.body;
+    playerBody.vx = axisX * player.speed;
+    playerBody.vy = axisY * player.speed;
 
-    player.position.x += player.velocity.x * dt;
-    player.position.y += player.velocity.y * dt;
+    this.physicsWorld.step(dt);
+
+    player.velocity.x = playerBody.vx;
+    player.velocity.y = playerBody.vy;
+    player.position.x = playerBody.x + playerBody.width / 2;
+    player.position.y = playerBody.y + playerBody.height / 2;
     player.display.position.set(player.position.x, player.position.y);
 
     this.updateHitboxPositions();
@@ -314,7 +390,8 @@ export class DemoScene {
       playerY: player.position.y,
       fps,
       stepMs: stats?.lastStepDurationMs ?? 0,
-      entities: this.entities.count()
+      entities: this.entities.count(),
+      playerGrounded: player.body.onGround
     });
   }
 
